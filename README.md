@@ -1,0 +1,121 @@
+# ista EcoTrend (CZ / Nordic) – custom integrace pro Home Assistant
+
+Neoficiální integrace pro **novou** verzi portálu ista Ecotrend na
+`https://ecotrend.ista.cz` (Unity-WebGL aplikace, backend
+`prod.istaonlinebeta.dk` / `graphs.istaonlinebeta.dk`, Keycloak realm
+`eed-nordic`).
+
+⚠️ Toto **není** totéž jako klasická appka "ista EcoTrend"
+(`api.prod.eed.ista.com`, realm `eed-prod`), pro kterou už existuje
+komunitní integrace (`Ludy87/ecotrend-ista`, knihovna `pyecotrend-ista`).
+Český `ecotrend.ista.cz` běží na jiném, novějším Nordic backendu, takže
+tahle integrace je napsaná od nuly na základě rozboru HAR záznamu z
+prohlížeče.
+
+## Co to umí
+
+Po přihlášení vytvoří pro každý měřič z `GET /api/Meters` jeden senzor
+(v našem případě: **Teplá voda**, **Studená voda**, **Energie**) se
+stavem = poslední odečet, jednotkou m³ / kWh a `state_class:
+total_increasing` – takže jde rovnou zapojit do Energy dashboardu.
+Ke každému senzoru se přidá i poslední spotřeba, datum odečtu, číslo
+měřiče a místnost jako atributy.
+
+## Logo / ikona
+
+Integrace má vlastní `brand/` složku (`icon.png`, `icon@2x.png`,
+`logo.png`, `logo@2x.png`) – od Home Assistant **2026.3** stačí tohle
+mít přímo v balíčku integrace a HA logo samo zobrazí v Nastavení →
+Zařízení a služby i na stránce zařízení, přes nové lokální API
+`/api/brands/integration/…` (žádná registrace ani zásah do
+`manifest.json` navíc není potřeba – funguje to automaticky podle
+názvu domény). Na starším HA (< 2026.3) integrace poběží úplně stejně,
+jen bez loga – nic se tím nerozbije.
+
+Jedna drobnost: v době psaní tohohle README měl HACS ve svém vlastním
+seznamu "Downloads" ještě otevřený bug (viz `hacs/integration#5171` a
+`#5223`), kdy si logo z lokální `brand/` složky nenačte a ukáže
+placeholder – i když na stránce Zařízení a služby v samotném HA se
+zobrazí správně. Není to chyba v tomhle balíčku, jen HACS zatím
+nedohnal novou funkci; časem by se to mělo opravit samo.
+
+## Zveřejnění na vlastním GitHubu (pro instalaci přes HACS)
+
+1. Založ nové **veřejné** repo na GitHubu (např. `ha-ecotrend-ista-cz`).
+2. Nahraj do něj obsah tohoto zipu tak, jak je (`custom_components/`,
+   `hacs.json`, `README.md`, `LICENSE` v kořeni repa).
+3. V `custom_components/ecotrend_ista_cz/manifest.json` nahraď
+   `your-github-handle` svým GitHub uživatelským jménem (pole
+   `codeowners`, `documentation`, `issue_tracker`).
+4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (např.
+   `v0.1.0`) – HACS podle releasů/tagů verzuje.
+5. V Home Assistantu: HACS → ⋮ vpravo nahoře → **Custom repositories** →
+   vlož URL svého repa → kategorie **Integration** → Add.
+6. Integrace se objeví v HACS ke stažení; po instalaci restartuj HA a
+   přidej ji přes Nastavení → Zařízení a služby, jak popsáno níž.
+
+## Instalace
+
+### Přes HACS (doporučeno)
+1. HACS → tři tečky vpravo nahoře → **Custom repositories**
+2. Přidej URL tohoto repozitáře, kategorie **Integration**
+3. Nainstaluj "ista EcoTrend (CZ / Nordic)" a restartuj Home Assistant
+
+### Ručně
+Zkopíruj složku `custom_components/ecotrend_ista_cz` do
+`<config>/custom_components/` a restartuj Home Assistant.
+
+### Nastavení
+Nastavení → Zařízení a služby → Přidat integraci → „ista EcoTrend (CZ /
+Nordic)" → zadej stejné uživatelské jméno a heslo, jaké používáš na
+ecotrend.ista.cz.
+
+V Možnostech integrace (ozubené kolo na kartě integrace) lze změnit
+interval aktualizace (výchozí 60 minut – odečty se na portálu stejně
+neaktualizují víc než cca jednou denně, takže není důvod stahovat
+častěji).
+
+## ⚠️ Jedna neznámá v přihlašování – čti, prosím
+
+Přihlašovací `POST /token` posílá kromě `username`/`password` ještě dvě
+pole, `value1` (32 bajtů) a `value2` (48 bajtů), zakódovaná jako
+`_46_190_76_..._`. Tahle pole generuje samotný zkompilovaný
+Unity/WebAssembly klient a z HAR záznamu nejde spolehlivě zjistit, jak
+přesně se počítají (byl by potřeba reverse engineering .wasm binárky).
+
+Nejpravděpodobnější vysvětlení je, že jde jen o telemetrii/otisk
+zařízení pro detekci podvodů na straně serveru, ne o kryptografický
+podpis, který se ověřuje – ostatní pole (`username`, `password`) totiž
+chodí normálně v čitelné podobě. Integrace proto posílá **náhodná**
+data ve stejném tvaru (32, resp. 48 čísel 0–255).
+
+**Pokud přihlášení selže** (chyba `invalid_auth` i se správným heslem):
+
+1. Zapni si debug log v `configuration.yaml`:
+   ```yaml
+   logger:
+     logs:
+       custom_components.ecotrend_ista_cz: debug
+   ```
+2. Zkus se znovu přihlásit a podívej se do logu, co přesně ista vrátila
+   (status kód a tělo odpovědi z `/token`).
+3. Nejlépe pořiď čerstvý HAR záznam **jen** přihlašovacího requestu
+   (Chrome DevTools → Network → „Preserve log“ → přihlásit se na
+   ecotrend.ista.cz → Export HAR) a porovnej `value1`/`value2` s
+   předchozím – pokud se mění i mezi dvěma přihlášeními **stejného**
+   prohlížeče/účtu, pravděpodobně jde jen o náhodná/perzistentní data
+   zařízení a chybu způsobuje něco jiného. Napiš mi znovu s tímhle
+   novým HAR a doladíme to.
+
+## Odhlašování
+
+V zachyceném provozu odhlášení nevolá žádný server endpoint (token
+zřejmě jen doexpiruje / se zahodí lokálně), takže integrace žádné
+volání při odebrání z Home Assistant neposílá.
+
+## Bezpečnostní poznámka
+
+Uživatelské jméno a heslo se ukládají v konfiguraci Home Assistant
+(`config_entries`), stejně jako u jiných cloudových integrací. Refresh
+token z odpovědi `/token` integrace využívá k obnovení přístupu bez
+nutnosti posílat heslo při každém dotazu.
