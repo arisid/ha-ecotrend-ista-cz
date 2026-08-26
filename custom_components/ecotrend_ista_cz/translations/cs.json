@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Připojit ista EcoTrend",
+        "description": "Zadejte přihlašovací údaje, které používáte na ecotrend.ista.cz (uživatelské jméno / zákaznické číslo a heslo).",
+        "data": {
+          "username": "Uživatelské jméno",
+          "password": "Heslo"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Znovu přihlásit ista EcoTrend",
+        "description": "Heslo pro {username} už neplatí. Zadejte prosím aktuální heslo.",
+        "data": {
+          "password": "Heslo"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nesprávné uživatelské jméno nebo heslo.",
+      "cannot_connect": "Nepodařilo se spojit se serverem ista EcoTrend. Zkuste to prosím později.",
+      "unknown": "Neočekávaná chyba."
+    },
+    "abort": {
+      "already_configured": "Tento účet ista je již nastaven.",
+      "reauth_successful": "Opětovné přihlášení proběhlo úspěšně."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nastavení ista EcoTrend",
+        "data": {
+          "scan_interval_minutes": "Interval aktualizace (minuty)"
+        }
+      }
+    }
+  }
+}

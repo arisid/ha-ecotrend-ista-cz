@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to ista EcoTrend",
+        "description": "Enter the login you use on ecotrend.ista.cz (username / customer number, and password).",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate ista EcoTrend",
+        "description": "The password for {username} no longer works. Please enter the current password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password.",
+      "cannot_connect": "Could not reach ista EcoTrend. Please try again later.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This ista account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ista EcoTrend options",
+        "data": {
+          "scan_interval_minutes": "Polling interval (minutes)"
+        }
+      }
+    }
+  }
+}

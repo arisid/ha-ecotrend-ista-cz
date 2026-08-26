@@ -1,0 +1,12 @@
+{
+  "domain": "ecotrend_ista_cz",
+  "name": "ista EcoTrend (CZ / Nordic)",
+  "codeowners": ["@your-github-handle"],
+  "config_flow": true,
+  "documentation": "https://github.com/your-github-handle/ha-ecotrend-ista-cz",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/your-github-handle/ha-ecotrend-ista-cz/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

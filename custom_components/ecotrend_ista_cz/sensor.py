@@ -1,0 +1,141 @@
+"""Sensor platform for ista EcoTrend (CZ / Nordic)."""
+from __future__ import annotations
+
+import logging
+from datetime import date, datetime
+from typing import Any
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.const import UnitOfEnergy, UnitOfVolume
+
+from .const import CONF_ADDRESS, CONF_CONS_ID, DOMAIN, METER_TYPE_ICONS
+from .coordinator import EcotrendIstaCzCoordinator
+
+_LOGGER = logging.getLogger(__name__)
+
+# API "Unit" field -> (HA unit, device_class)
+_UNIT_MAP: dict[str, tuple[str, SensorDeviceClass | None]] = {
+    "m3": (UnitOfVolume.CUBIC_METERS, None),  # device_class set separately from MeterType
+    "kWh": (UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY),
+    "MWh": (UnitOfEnergy.MEGA_WATT_HOUR, SensorDeviceClass.ENERGY),
+}
+
+_WATER_METER_TYPES = {"HW", "CW"}
+
+
+def _parse_date(value: str | None) -> date | None:
+    """Parse ista's DD-MM-YYYY reading date into a date object."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%d-%m-%Y").date()
+    except ValueError:
+        return None
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    # ista uses "3000-01-01" as a sentinel for "no deactivation date yet"
+    # (i.e. the meter is still active) - surface that as None instead.
+    if parsed.year >= 3000:
+        return None
+    return parsed
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Set up ista EcoTrend meter sensors from a config entry."""
+    coordinator: EcotrendIstaCzCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    entities = [
+        EcotrendIstaCzMeterSensor(coordinator, entry, meter_id)
+        for meter_id in coordinator.data.get("meters", {})
+    ]
+    async_add_entities(entities)
+
+
+class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], SensorEntity):
+    """Represents the latest reading of a single ista meter."""
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    def __init__(
+        self, coordinator: EcotrendIstaCzCoordinator, entry: ConfigEntry, meter_id: str
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._meter_id = meter_id
+
+        meter = self._meter
+        self._attr_unique_id = f"{entry.entry_id}_{meter_id}"
+
+        headline = meter.get("Headline") or meter.get("MeterText") or "Měřič"
+        room = (meter.get("ROOM_DESCR") or "").strip()
+        self._attr_name = f"{headline} - {room}" if room else headline
+
+        meter_type = (meter.get("MeterType") or "").upper()
+        self._attr_icon = METER_TYPE_ICONS.get(meter_type, "mdi:gauge")
+
+        unit = meter.get("Unit")
+        ha_unit, device_class = _UNIT_MAP.get(unit, (unit, None))
+        self._attr_native_unit_of_measurement = ha_unit
+        if meter_type in _WATER_METER_TYPES:
+            self._attr_device_class = SensorDeviceClass.WATER
+        elif device_class is not None:
+            self._attr_device_class = device_class
+
+    @property
+    def _meter(self) -> dict[str, Any]:
+        return self.coordinator.data.get("meters", {}).get(self._meter_id, {})
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._meter_id in self.coordinator.data.get("meters", {})
+
+    @property
+    def native_value(self) -> float | None:
+        return self._meter.get("Last_Meter_Reading")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        meter = self._meter
+        inst_no = meter.get("INST_NO")
+        if isinstance(inst_no, float) and inst_no.is_integer():
+            inst_no = int(inst_no)
+        return {
+            "last_consumption": meter.get("Last_Meter_Consumption"),
+            "reading_date": _parse_date(meter.get("Reading_date")),
+            "meter_number": meter.get("METER_NO"),
+            "room": meter.get("ROOM_DESCR"),
+            "installation_number": inst_no,
+            "activation_date": _parse_iso(meter.get("Activation_date")),
+            "deactivation_date": _parse_iso(meter.get("Deactivation_date")),
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        address = self._entry.data.get(CONF_ADDRESS)
+        cons_id = self._entry.data.get(CONF_CONS_ID, self._entry.entry_id)
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(cons_id))},
+            name=f"ista EcoTrend - {address}" if address else "ista EcoTrend",
+            manufacturer="ista",
+            model="EcoTrend",
+            configuration_url="https://ecotrend.ista.cz",
+        )
