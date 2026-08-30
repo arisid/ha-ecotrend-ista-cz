@@ -32,7 +32,22 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
-from .const import METERS_URL, TOKEN_EXPIRY_LEEWAY, TOKEN_URL, USERINFO_URL
+from .const import (
+    METERS_URL,
+    TOKEN_EXPIRY_LEEWAY,
+    TOKEN_URL,
+    USAGE_ENERGY_DATA_URL,
+    USAGE_HISTORY_INTERVAL_MONTHLY,
+    USAGE_WATER_COLD_DATA_URL,
+    USAGE_WATER_HOT_DATA_URL,
+    USERINFO_URL,
+)
+
+_HISTORY_URLS = {
+    "ENERGY": USAGE_ENERGY_DATA_URL,
+    "HW": USAGE_WATER_HOT_DATA_URL,
+    "CW": USAGE_WATER_COLD_DATA_URL,
+}
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -237,6 +252,62 @@ class EcotrendIstaCzApiClient:
         if error.get("UserMessage") or error.get("InternalMessage"):
             _LOGGER.debug("ista Meters endpoint returned an error message: %s", error)
         return meters
+
+    async def async_get_usage_history(self, meter_type: str) -> list[dict[str, Any]]:
+        """GET monthly usage history from the "graphs" sub-app, for one of
+        the meter types in ``_HISTORY_URLS`` (ENERGY / HW / CW).
+
+        graphs.istaonlinebeta.dk is a separate sub-application from the main
+        API used by async_get_meters()/async_get_user_info(). In the
+        captured traffic it was reached via its own session token rather
+        than the exact same token as the main /token response - but both
+        are JWTs issued by the same Keycloak realm+client for the same
+        user, so this reuses our regular access token as the
+        ``istaauthentication`` header. That assumption is not verified
+        against a live account (only the main API token flow was directly
+        confirmed) - if ista rejects it, this raises
+        EcotrendIstaCzApiError/EcotrendIstaCzAuthError and callers should
+        treat missing history as non-fatal: the current-reading sensors
+        keep working regardless of whether this call succeeds.
+        """
+        url = _HISTORY_URLS.get(meter_type.upper())
+        if url is None:
+            raise EcotrendIstaCzApiError(f"No usage-history endpoint known for meter type {meter_type!r}")
+
+        token = await self.async_ensure_token()
+        headers = {
+            **_COMMON_HEADERS,
+            "istaauthentication": token,
+            "istalanguage": self._language,
+            "Accept": "application/json;odata=verbose,text/plain, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        try:
+            # "inverval" is not our typo - see const.py.
+            resp = await self._session.get(
+                url,
+                params={"inverval": USAGE_HISTORY_INTERVAL_MONTHLY},
+                headers=headers,
+                timeout=_TIMEOUT,
+            )
+        except ClientError as err:
+            raise EcotrendIstaCzApiError(f"Network error calling {url}: {err}") from err
+
+        if resp.status in (401, 403):
+            body = await resp.text()
+            _LOGGER.debug(
+                "graphs.istaonlinebeta.dk rejected our token: %s %s", resp.status, body
+            )
+            raise EcotrendIstaCzAuthError(
+                "graphs.istaonlinebeta.dk odmítlo token pro historii spotřeby."
+            )
+        if resp.status != 200:
+            body = await resp.text()
+            raise EcotrendIstaCzApiError(
+                f"Unexpected status {resp.status} from {url}: {body[:200]}"
+            )
+
+        return await resp.json(content_type=None)
 
     @property
     def user_info(self) -> dict[str, Any]:
