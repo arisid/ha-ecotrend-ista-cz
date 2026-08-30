@@ -17,8 +17,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.const import UnitOfEnergy, UnitOfVolume
 
-from .const import CONF_ADDRESS, CONF_CONS_ID, DOMAIN, METER_TYPE_ICONS
+from .const import CONF_ADDRESS, CONF_CONS_ID, CONF_HISTORY_IMPORTED, DOMAIN, METER_TYPE_ICONS
 from .coordinator import EcotrendIstaCzCoordinator
+from .statistics import async_backfill_usage_statistics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,6 +104,70 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
     @property
     def _meter(self) -> dict[str, Any]:
         return self.coordinator.data.get("meters", {}).get(self._meter_id, {})
+
+    async def async_added_to_hass(self) -> None:
+        """Once this entity is registered (and self.entity_id is known),
+        do a one-time backfill of its historical statistics from ista -
+        for all three meter types confirmed against a real capture
+        (energy, hot water, cold water - see api.py's _HISTORY_URLS).
+        """
+        await super().async_added_to_hass()
+
+        meter_type = (self._meter.get("MeterType") or "").upper()
+        if meter_type not in ("ENERGY", "HW", "CW"):
+            return
+
+        already_imported = self._entry.data.get(CONF_HISTORY_IMPORTED, [])
+        if self._meter_id in already_imported:
+            return
+
+        current_reading = self._meter.get("Last_Meter_Reading")
+        unit = self.native_unit_of_measurement
+        if current_reading is None or not unit:
+            return
+
+        active_since = None
+        try:
+            activation_raw = self._meter.get("Activation_date")
+            if activation_raw:
+                active_since = datetime.fromisoformat(activation_raw)
+        except ValueError:
+            active_since = None
+
+        try:
+            history = await self.coordinator.client.async_get_usage_history(meter_type)
+            imported = await async_backfill_usage_statistics(
+                self.hass,
+                self.entity_id,
+                self.name or "ista EcoTrend",
+                unit,
+                history,
+                current_reading,
+                active_since,
+            )
+        except Exception:  # noqa: BLE001 - deliberately broad, see docstring
+            # This covers both ista-side failures (EcotrendIstaCzApiError)
+            # and anything going wrong on the HA/recorder side (e.g. the
+            # recorder integration being disabled). Either way this is a
+            # best-effort backfill: it must never take the actual meter
+            # reading sensor down with it.
+            _LOGGER.warning(
+                "Nepodařilo se načíst/uložit historii spotřeby z ista pro "
+                "%s - aktuální hodnoty tím nejsou dotčené, zkusí se to "
+                "znovu při příštím restartu HA.",
+                self.entity_id,
+                exc_info=True,
+            )
+            return
+
+        if imported:
+            self.hass.config_entries.async_update_entry(
+                self._entry,
+                data={
+                    **self._entry.data,
+                    CONF_HISTORY_IMPORTED: [*already_imported, self._meter_id],
+                },
+            )
 
     @property
     def available(self) -> bool:

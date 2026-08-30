@@ -3,10 +3,10 @@
   "name": "ista EcoTrend (CZ / Nordic)",
   "codeowners": ["@arisid"],
   "config_flow": true,
-  "documentation": "https://github.com/your-github-handle/ha-ecotrend-ista-cz",
+  "documentation": "https://github.com/arisid/ha-ecotrend-ista-cz",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/your-github-handle/ha-ecotrend-ista-cz/issues",
+  "issue_tracker": "https://github.com/arisid/ha-ecotrend-ista-cz/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.3.0"
 }
