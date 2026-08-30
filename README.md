@@ -21,6 +21,43 @@ total_increasing` – takže jde rovnou zapojit do Energy dashboardu.
 Ke každému senzoru se přidá i poslední spotřeba, datum odečtu, číslo
 měřiče a místnost jako atributy.
 
+## Historie spotřeby (Energy dashboard)
+
+Všechny tři senzory (**Energie**, **Teplá voda**, **Studená voda**) si
+při prvním načtení jednorázově natáhnou zpětnou měsíční historii z
+`graphs.istaonlinebeta.dk` a nahrají ji do dlouhodobých statistik Home
+Assistanta (`recorder`) – takže se v Energy dashboardu rovnou zobrazí i
+historie zpětně, ne jen to, co HA napočítá od instalace integrace.
+Endpointy (`Usage_Energy_Data`, `Usage_WaterHot_Data`,
+`Usage_WaterCold_Data`, vše s `inverval=3` pro měsíční krok) i chování
+`formerPeriode` (srovnání s předchozím rokem, dostupné jako součást
+každého bodu) jsme ověřili proti HAR záznamu z proklikání všech
+možností zobrazení (den/týden/měsíc/rok) pro všechny tři měřiče.
+
+**Výměna fyzického vodoměru:** vodoměry se běžně po letech fyzicky
+vyměňují (kalibrace) a historie u ista jede napříč výměnami, zatímco
+aktuální odečet patří jen tomu současnému kusu. Integrace to řeší tak,
+že do importované historie bere jen měsíce od `Activation_date`
+aktuálního měřiče dál (to už teď vidíš i jako atribut u senzoru) –
+jinak by se v grafu objevily nesmyslné záporné hodnoty z období starého
+měřiče. Otestováno na reálných datech (u tvého účtu šlo přesně o tenhle
+případ, oba vodoměry mají `Activation_date` 2024-09-18).
+
+⚠️ **Menší nejistota navíc:** `graphs.istaonlinebeta.dk` je oddělená
+podaplikace od hlavního API (`prod.istaonlinebeta.dk`), kterou jsme
+v zachyceném provozu viděli používat vlastní, jinak vydaný token. Oba
+tokeny ale patří stejnému uživateli, stejnému Keycloak realmu i
+klientovi, takže integrace zkouší použít náš běžný přístupový token i
+tady – to ale nebylo ověřeno přímo proti živému účtu (na rozdíl od
+zbytku integrace, který přes reálná data prošel). Pokud by ista tohle
+odmítala, historie se prostě nenačte (do logu půjde varování), ale
+**aktuální hodnoty senzorů tím nejsou nijak ovlivněné** – to jsme
+otestovali explicitně, včetně scénáře, kdy uspěje jen část měřičů.
+
+Import proběhne jen jednou za život dané instalace (eviduje se v
+konfiguraci integrace) – při dalších restartech/reloadech se
+`graphs.istaonlinebeta.dk` znovu nevolá.
+
 ## Logo / ikona
 
 Integrace má vlastní `brand/` složku (`icon.png`, `icon@2x.png`,
@@ -32,23 +69,27 @@ Zařízení a služby i na stránce zařízení, přes nové lokální API
 názvu domény). Na starším HA (< 2026.3) integrace poběží úplně stejně,
 jen bez loga – nic se tím nerozbije.
 
-Jedna drobnost: v době psaní tohohle README měl HACS ve svém vlastním
-seznamu "Downloads" ještě otevřený bug (viz `hacs/integration#5171` a
-`#5223`), kdy si logo z lokální `brand/` složky nenačte a ukáže
-placeholder – i když na stránce Zařízení a služby v samotném HA se
-zobrazí správně. Není to chyba v tomhle balíčku, jen HACS zatím
-nedohnal novou funkci; časem by se to mělo opravit samo.
+⚠️ **V HACS seznamu před instalací se logo nezobrazí** – to není
+řešitelné úpravou balíčku. Je to potvrzený otevřený bug v samotném
+HACS ([hacs/integration#5171](https://github.com/hacs/integration/issues/5171)):
+HACS si logo pro svůj přehled tahá z vlastního CDN
+(`data-v2.hacs.xyz`), které se plní ze starého repozitáře
+`home-assistant/brands` – ten ale od HA 2026.3 pro custom integrace
+noví PR vůbec nepřijímá (nahradila ho právě tahle lokální `brand/`
+složka). HACS zatím neumí spadnout zpátky na lokální HA API. Jakmile to
+HACS opraví, logo se objeví samo bez jakékoli změny u nás.
 
 ## Zveřejnění na vlastním GitHubu (pro instalaci přes HACS)
 
 1. Založ nové **veřejné** repo na GitHubu (např. `ha-ecotrend-ista-cz`).
 2. Nahraj do něj obsah tohoto zipu tak, jak je (`custom_components/`,
    `hacs.json`, `README.md`, `LICENSE` v kořeni repa).
-3. V `custom_components/ecotrend_ista_cz/manifest.json` nahraď
-   `your-github-handle` svým GitHub uživatelským jménem (pole
-   `codeowners`, `documentation`, `issue_tracker`).
-4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (např.
-   `v0.1.0`) – HACS podle releasů/tagů verzuje.
+3. `manifest.json` už má vyplněné `codeowners`/`documentation`/`issue_tracker`
+   na `github.com/arisid/ha-ecotrend-ista-cz` – při aktualizaci existujícího
+   repa nic měnit nemusíš, jen nahraj nové soubory (přepíší staré).
+4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (aktuálně
+   `v0.3.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
+   update.
 5. V Home Assistantu: HACS → ⋮ vpravo nahoře → **Custom repositories** →
    vlož URL svého repa → kategorie **Integration** → Add.
 6. Integrace se objeví v HACS ke stažení; po instalaci restartuj HA a
