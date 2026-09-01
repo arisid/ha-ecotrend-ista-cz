@@ -88,8 +88,16 @@ HACS opraví, logo se objeví samo bez jakékoli změny u nás.
    na `github.com/arisid/ha-ecotrend-ista-cz` – při aktualizaci existujícího
    repa nic měnit nemusíš, jen nahraj nové soubory (přepíší staré).
 4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (aktuálně
-   `v0.3.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
+   `v0.5.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
    update.
+
+   **Pořadí je důležité:** nejdřív nahraj/aktualizuj soubory (hlavně
+   `manifest.json`), teprve **pak** vytvoř Release s odpovídajícím tagem.
+   Release je navázaný na konkrétní commit v okamžiku vytvoření – když ho
+   založíš dřív, než jsou soubory nahrané, bude ukazovat na starou verzi
+   a HACS žádný update nenabídne, i když se `main` větev později opraví.
+   Řešení v tom případě: smazat release i tag a založit znovu, teď už na
+   aktuální commit.
 5. V Home Assistantu: HACS → ⋮ vpravo nahoře → **Custom repositories** →
    vlož URL svého repa → kategorie **Integration** → Add.
 6. Integrace se objeví v HACS ke stažení; po instalaci restartuj HA a
@@ -112,9 +120,21 @@ Nordic)" → zadej stejné uživatelské jméno a heslo, jaké používáš na
 ecotrend.ista.cz.
 
 V Možnostech integrace (ozubené kolo na kartě integrace) lze změnit
-interval aktualizace (výchozí 60 minut – odečty se na portálu stejně
-neaktualizují víc než cca jednou denně, takže není důvod stahovat
-častěji).
+interval aktualizace (výchozí **1× denně** – odečty se na portálu ista
+mění tak jednou týdně, takže častější stahování nemá smysl a jen to
+zbytečně zatěžuje jejich server; příliš agresivní dotazování navíc
+riskuje, že ista dočasně zablokuje přihlašování - viz níže).
+
+⚠️ **Opakovaná neúspěšná nastavení = opakovaná plná přihlášení.** Když
+se první načtení integrace nepovede (např. chybný token, výpadek na
+straně ista), Home Assistant to sám zkouší opakovaně na pozadí – a
+každý pokus dělá kompletní nové přihlášení jménem/heslem, ne jen
+obnovu tokenu. V kombinaci s ručním "Znovu načíst" se to může rychle
+nasčítat a narazit na jejich ochranu proti hromadnému přihlašování
+(pak i běžné přihlášení přes prohlížeč začne "vysychat"/přestane
+reagovat). Pokud se to stane: nezkoušet dál, dát tomu pár hodin pauzu,
+a nejdřív ověřit přes prohlížeč na ecotrend.ista.cz, že přihlášení
+zase funguje, než to zkusíš znovu v HA.
 
 ## ⚠️ Jedna neznámá v přihlašování – čti, prosím
 

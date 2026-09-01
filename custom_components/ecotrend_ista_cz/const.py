@@ -47,7 +47,11 @@ CONF_HISTORY_IMPORTED = "history_imported_meters"
 DEFAULT_LANGUAGE = "cs-CZ"
 
 # --- Update / options --------------------------------------------------------
-DEFAULT_SCAN_INTERVAL = timedelta(minutes=60)
+# ista's own portal only updates meter readings roughly once a week, so
+# polling more often than daily just adds needless load on their servers
+# for no fresher data. Default to once a day; still configurable via the
+# integration's Options if someone wants tighter/looser polling.
+DEFAULT_SCAN_INTERVAL = timedelta(days=1)
 MIN_SCAN_INTERVAL_MINUTES = 15
 CONF_SCAN_INTERVAL_MINUTES = "scan_interval_minutes"
 
