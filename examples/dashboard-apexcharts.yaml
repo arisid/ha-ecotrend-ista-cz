@@ -1,0 +1,89 @@
+# Měsíční grafy spotřeby (voda + energie) pro Lovelace dashboard
+#
+# Vyžaduje kartu "ApexCharts Card" (custom:apexcharts-card) nainstalovanou
+# přes HACS -> Frontend.
+#
+# PŘED VLOŽENÍM NAHRAĎ TYHLE TŘI ŘÁDKY svými skutečnými entity ID:
+#   sensor.YOUR_COLD_WATER_ENTITY_ID
+#   sensor.YOUR_HOT_WATER_ENTITY_ID
+#   sensor.YOUR_ENERGY_ENTITY_ID
+#
+# Entity ID této integrace obsahují v názvu adresu z tvého ista účtu (např.
+# sensor.ista_ecotrend_hlavni_12_..._studena_voda_toaleta), takže se liší
+# instalaci od instalace - nejsou tedy univerzální a v tomhle souboru je
+# nejde předvyplnit natvrdo za tebe.
+# Najdeš je v Nastavení -> Zařízení a služby -> ista EcoTrend -> klikni na
+# zařízení -> u každého senzoru v pravém horním rohu (i) -> "entity ID",
+# nebo přes Vývojářské nástroje -> Stavy, filtr "ista".
+#
+# Vysvětlivky k nastavení:
+# - `statistics: {type: change, period: month}` počítá rozdíl (spotřebu)
+#   za každý kalendářní měsíc přímo z dlouhodobých statistik - žádný další
+#   `group_by` navrch není potřeba, protože historie importovaná touhle
+#   integrací je uložená přesně po měsících.
+# - `span: {end: month, offset: "-1month"}` schválně vynechává aktuální
+#   nedokončený měsíc (jinak by se u něj mohlo počítat nesmyslné/záporné
+#   číslo, protože měsíc ještě neskončil).
+
+type: vertical-stack
+cards:
+  - type: custom:apexcharts-card
+    header:
+      show: true
+      title: Spotřeba vody – měsíčně
+      show_states: true
+      colorize_states: true
+    graph_span: 12month
+    span:
+      end: month
+      offset: "-1month"
+    stacked: true
+    yaxis:
+      - decimals: 2
+        min: 0
+    series:
+      - entity: sensor.YOUR_COLD_WATER_ENTITY_ID
+        name: Studená voda
+        color: "#3399ff"
+        type: column
+        unit: m³
+        statistics:
+          type: change
+          period: month
+          align: end
+        float_precision: 2
+      - entity: sensor.YOUR_HOT_WATER_ENTITY_ID
+        name: Teplá voda
+        color: "#ff9900"
+        type: column
+        unit: m³
+        statistics:
+          type: change
+          period: month
+          align: end
+        float_precision: 2
+
+  - type: custom:apexcharts-card
+    header:
+      show: true
+      title: Spotřeba energie – měsíčně
+      show_states: true
+      colorize_states: true
+    graph_span: 12month
+    span:
+      end: month
+      offset: "-1month"
+    yaxis:
+      - decimals: 0
+        min: 0
+    series:
+      - entity: sensor.YOUR_ENERGY_ENTITY_ID
+        name: Energie
+        color: "#2ecc71"
+        type: column
+        unit: kWh
+        statistics:
+          type: change
+          period: month
+          align: end
+        float_precision: 1
