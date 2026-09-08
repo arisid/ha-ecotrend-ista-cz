@@ -58,6 +58,20 @@ Import proběhne jen jednou za život dané instalace (eviduje se v
 konfiguraci integrace) – při dalších restartech/reloadech se
 `graphs.istaonlinebeta.dk` znovu nevolá.
 
+## Ukázkový dashboard (ApexCharts)
+
+V [`examples/dashboard-apexcharts.yaml`](examples/dashboard-apexcharts.yaml)
+je hotová konfigurace pro kartu [ApexCharts Card](https://github.com/RomRider/apexcharts-card)
+(instaluje se přes HACS → Frontend) – dva sloupcové grafy, měsíční
+spotřeba vody (teplá + studená) a měsíční spotřeba energie, za posledních
+12 dokončených měsíců.
+
+Entity ID v tom souboru jsou placeholdery (`sensor.YOUR_COLD_WATER_ENTITY_ID`
+apod.) – entity ID téhle integrace mají v názvu adresu z tvého ista účtu,
+takže jsou pro každou instalaci jiné a nedají se předvyplnit univerzálně.
+Návod, jak si vlastní entity ID najít, je přímo v komentáři na začátku
+souboru.
+
 ## Logo / ikona
 
 Integrace má vlastní `brand/` složku (`icon.png`, `icon@2x.png`,
