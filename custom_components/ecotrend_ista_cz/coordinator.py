@@ -34,6 +34,10 @@ class EcotrendIstaCzCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.entry = entry
         self.client = client
+        # Live sensor entities register themselves here (see sensor.py) so
+        # the reimport_history service can find them without needing an
+        # entity registry lookup.
+        self.entities: list[Any] = []
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:

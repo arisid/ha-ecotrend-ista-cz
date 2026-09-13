@@ -36,5 +36,11 @@
         }
       }
     }
+  },
+  "services": {
+    "reimport_history": {
+      "name": "Reimport consumption history",
+      "description": "Re-fetches monthly usage history from ista for all meters and recomputes Home Assistant's long-term statistics. No new login required - reuses the already stored token. Useful after an integration update that fixes history calculations, or after a physical meter replacement."
+    }
   }
 }

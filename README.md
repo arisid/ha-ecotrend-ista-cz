@@ -58,6 +58,32 @@ Import proběhne jen jednou za život dané instalace (eviduje se v
 konfiguraci integrace) – při dalších restartech/reloadech se
 `graphs.istaonlinebeta.dk` znovu nevolá.
 
+**Aktuální (nedokončený) měsíc se nikdy neimportuje jako statistika.**
+ista ve svém API vrací řádek i pro rozjetý měsíc, jenže jeho hodnota se
+každým dnem mění – kdyby se to naimportovalo jako hotový bod a paralelně
+k tomu Home Assistant sám průběžně dopočítával statistiky z živého
+senzoru za tytéž dny, mohlo to vypadat, jako by byl měsíc už u konce
+(nafouklé/nesmyslné číslo hned v jeho polovině). Integrace proto
+rozjetý měsíc z importu vždy vynechá – jeho částečná hodnota se použije
+jen k tomu, aby se dopočítaly správné hodnoty pro *dokončené* měsíce
+(odečte se od aktuálního odečtu, aby historie nebyla o kus vyšší, než
+má být), samotný bod pro tenhle měsíc se ale do statistik nezapisuje.
+Živý senzor si "svůj" měsíc doplní přirozeně, den po dni, jak přichází
+nová data.
+
+### Ruční přepočet historie (akce `reimport_history`)
+
+Import běží automaticky jen jednou. Kdyby bylo někdy potřeba historii
+přepočítat znovu – třeba po aktualizaci integrace, která opravuje výpočet
+(jako výše), nebo po výměně fyzického měřiče – jde to spustit ručně:
+
+Nástroje pro vývojáře → Akce → vyhledej **„ista EcoTrend: Znovu
+importovat historii spotřeby"** → Spustit.
+
+Nepotřebuje to nové přihlášení (použije se už uložený token), takže to
+lze bez obav spustit i opakovaně – neriskuje se tím žádné další
+zatěžování přihlašovacího endpointu ista.
+
 ## Ukázkový dashboard (ApexCharts)
 
 V [`examples/dashboard-apexcharts.yaml`](examples/dashboard-apexcharts.yaml)
@@ -102,7 +128,7 @@ HACS opraví, logo se objeví samo bez jakékoli změny u nás.
    na `github.com/arisid/ha-ecotrend-ista-cz` – při aktualizaci existujícího
    repa nic měnit nemusíš, jen nahraj nové soubory (přepíší staré).
 4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (aktuálně
-   `v0.5.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
+   `v0.6.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
    update.
 
    **Pořadí je důležité:** nejdřív nahraj/aktualizuj soubory (hlavně

@@ -36,5 +36,11 @@
         }
       }
     }
+  },
+  "services": {
+    "reimport_history": {
+      "name": "Znovu importovat historii spotřeby",
+      "description": "Znovu stáhne měsíční historii spotřeby z ista pro všechny měřiče a přepočítá dlouhodobé statistiky v Home Assistantu. Nepotřebuje nové přihlášení - použije se už uložený token. Hodí se po aktualizaci integrace, která opravuje výpočet historie, nebo po výměně fyzického měřiče."
+    }
   }
 }

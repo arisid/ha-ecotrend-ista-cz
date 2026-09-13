@@ -44,6 +44,8 @@ CONF_CONS_ID = "cons_id"
 # do this backfill once per meter (not on every restart/reload).
 CONF_HISTORY_IMPORTED = "history_imported_meters"
 
+SERVICE_REIMPORT_HISTORY = "reimport_history"
+
 DEFAULT_LANGUAGE = "cs-CZ"
 
 # --- Update / options --------------------------------------------------------

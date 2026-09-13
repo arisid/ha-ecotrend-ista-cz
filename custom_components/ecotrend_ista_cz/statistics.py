@@ -58,6 +58,16 @@ def build_statistics(
     get from /api/Meters, avoiding a visible jump on the Energy dashboard
     between backfilled history and what HA tracks going forward.
 
+    The *current*, still-in-progress calendar month is deliberately
+    excluded from the imported points - ista's row for it is a partial,
+    still-changing total (it keeps growing until the month ends), and the
+    live polled sensor already builds up that month's real statistics on
+    its own as normal state changes come in. Importing a point for it too
+    would double up with whatever live tracking computes for the same
+    days, and produce inflated/nonsensical numbers once the month actually
+    finishes. Its partial value is still used to correct the anchor below,
+    just not imported as a statistic point of its own.
+
     ``active_since``, when given, drops any month before the *current*
     physical meter's own activation date. Water sub-meters in particular
     get physically replaced every few years (calibration requirements) -
@@ -69,8 +79,11 @@ def build_statistics(
     negative/decreasing series for the period before the swap.
     """
     cutoff = (active_since.year, active_since.month) if active_since else None
+    now_local = dt_util.now()
+    current_period = (now_local.year, now_local.month)
 
     points: list[tuple[datetime, float]] = []
+    current_month_partial = 0.0
     for row in history:
         value = row.get("value")
         raw_date = row.get("date")
@@ -80,7 +93,11 @@ def build_statistics(
             parsed_raw = datetime.fromisoformat(raw_date)
         except ValueError:
             continue
-        if cutoff is not None and (parsed_raw.year, parsed_raw.month) < cutoff:
+        period = (parsed_raw.year, parsed_raw.month)
+        if cutoff is not None and period < cutoff:
+            continue
+        if period == current_period:
+            current_month_partial += float(value)
             continue
         start = _month_start_utc(raw_date)
         if start is None:
@@ -98,7 +115,13 @@ def build_statistics(
         running += delta
         cumulative.append((start, running))
 
-    offset = current_reading - cumulative[-1][1]
+    # Anchor the completed-months series to the reading as it stood at the
+    # *end of the last completed month* - not today's live reading, which
+    # already includes however much has been used so far in the excluded,
+    # still-in-progress current month. Subtracting that partial amount
+    # avoids inflating every historical month by it.
+    anchor_reading = current_reading - current_month_partial
+    offset = anchor_reading - cumulative[-1][1]
     result: list[StatisticData] = []
     prev = 0.0
     for start, total in cumulative:

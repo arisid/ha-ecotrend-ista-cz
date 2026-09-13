@@ -112,19 +112,37 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
         (energy, hot water, cold water - see api.py's _HISTORY_URLS).
         """
         await super().async_added_to_hass()
+        self.coordinator.entities.append(self)
+        await self._async_import_history()
 
+    async def async_will_remove_from_hass(self) -> None:
+        if self in self.coordinator.entities:
+            self.coordinator.entities.remove(self)
+        await super().async_will_remove_from_hass()
+
+    async def _async_import_history(self, force: bool = False) -> bool:
+        """Fetch and (re)import this meter's historical statistics.
+
+        With ``force=False`` (the normal path, run once per meter from
+        ``async_added_to_hass``), this is a no-op if already imported
+        before. With ``force=True`` (used by the ``reimport_history``
+        service), it re-fetches and re-imports regardless, reusing the
+        already-authenticated API client - no fresh login involved, so it's
+        safe to call anytime a past import needs correcting (e.g. after a
+        code fix, or after a water meter gets physically replaced).
+        """
         meter_type = (self._meter.get("MeterType") or "").upper()
         if meter_type not in ("ENERGY", "HW", "CW"):
-            return
+            return False
 
         already_imported = self._entry.data.get(CONF_HISTORY_IMPORTED, [])
-        if self._meter_id in already_imported:
-            return
+        if not force and self._meter_id in already_imported:
+            return False
 
         current_reading = self._meter.get("Last_Meter_Reading")
         unit = self.native_unit_of_measurement
         if current_reading is None or not unit:
-            return
+            return False
 
         active_since = None
         try:
@@ -154,13 +172,13 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
             _LOGGER.warning(
                 "Nepodařilo se načíst/uložit historii spotřeby z ista pro "
                 "%s - aktuální hodnoty tím nejsou dotčené, zkusí se to "
-                "znovu při příštím restartu HA.",
+                "znovu při příštím restartu HA (nebo ruční akcí reimport_history).",
                 self.entity_id,
                 exc_info=True,
             )
-            return
+            return False
 
-        if imported:
+        if imported and self._meter_id not in already_imported:
             self.hass.config_entries.async_update_entry(
                 self._entry,
                 data={
@@ -168,6 +186,7 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
                     CONF_HISTORY_IMPORTED: [*already_imported, self._meter_id],
                 },
             )
+        return imported
 
     @property
     def available(self) -> bool:
