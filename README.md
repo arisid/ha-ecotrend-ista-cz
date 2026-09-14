@@ -71,6 +71,18 @@ má být), samotný bod pro tenhle měsíc se ale do statistik nezapisuje.
 Živý senzor si "svůj" měsíc doplní přirozeně, den po dni, jak přichází
 nová data.
 
+### Spotřeba za rozjetý měsíc (atribut `consumption_this_month`)
+
+Zobrazit spolehlivě "kolik jsem spotřeboval od začátku měsíce" přes
+grafové karty počítající "změnu za období" se ukázalo být nespolehlivé,
+dokud měsíc neskončí (viz níže) – ApexCharts i samotné statistiky HA s
+neúplným obdobím občas počítají nesmysly (záporná čísla apod.). Místo
+spoléhání na tenhle přepočet za běhu integrace **při každém pravidelném
+dotazu (výchozí 1× denně) stáhne aktuální hodnotu za rozjetý měsíc přímo
+z ista** a zpřístupní ji jako atribut `consumption_this_month` u
+příslušného senzoru – stejné číslo, jaké v tu chvíli ukazuje appka ista,
+žádný dopočet přes statistiky.
+
 ### Ruční přepočet historie (akce `reimport_history`)
 
 Import běží automaticky jen jednou. Kdyby bylo někdy potřeba historii
@@ -88,9 +100,18 @@ zatěžování přihlašovacího endpointu ista.
 
 V [`examples/dashboard-apexcharts.yaml`](examples/dashboard-apexcharts.yaml)
 je hotová konfigurace pro kartu [ApexCharts Card](https://github.com/RomRider/apexcharts-card)
-(instaluje se přes HACS → Frontend) – dva sloupcové grafy, měsíční
-spotřeba vody (teplá + studená) a měsíční spotřeba energie, za posledních
-12 dokončených měsíců.
+(instaluje se přes HACS → Frontend) – karta s aktuálním měsícem
+(`consumption_this_month`) a dva sloupcové grafy, měsíční spotřeba vody
+(teplá + studená) a měsíční spotřeba energie, za posledních 12
+dokončených měsíců.
+
+Sloupcové grafy schválně ukazují jen **dokončené** měsíce
+(`span.offset: "-1month"`). Zkoušeli jsme přidat i rozjetý měsíc přímo do
+grafu přes `statistics: {type: change, period: month}` bez tohohle
+posunu, ale karta ho pro neúplné období spolehlivě nepočítá (vychází
+záporná/nesmyslná čísla) – nezávisí to na naší integraci, je to
+vlastnost dané kombinace karty a HA statistik pro neuzavřené období.
+Proto je aktuální měsíc řešený zvlášť přes `consumption_this_month`.
 
 Entity ID v tom souboru jsou placeholdery (`sensor.YOUR_COLD_WATER_ENTITY_ID`
 apod.) – entity ID téhle integrace mají v názvu adresu z tvého ista účtu,
@@ -128,7 +149,7 @@ HACS opraví, logo se objeví samo bez jakékoli změny u nás.
    na `github.com/arisid/ha-ecotrend-ista-cz` – při aktualizaci existujícího
    repa nic měnit nemusíš, jen nahraj nové soubory (přepíší staré).
 4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (aktuálně
-   `v0.6.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
+   `v0.7.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
    update.
 
    **Pořadí je důležité:** nejdřív nahraj/aktualizuj soubory (hlavně

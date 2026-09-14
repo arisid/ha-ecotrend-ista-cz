@@ -31,6 +31,7 @@ _UNIT_MAP: dict[str, tuple[str, SensorDeviceClass | None]] = {
 }
 
 _WATER_METER_TYPES = {"HW", "CW"}
+_UNIT_CLASS_MAP = {"ENERGY": "energy", "HW": "volume", "CW": "volume"}
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -162,6 +163,7 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
                 history,
                 current_reading,
                 active_since,
+                unit_class=_UNIT_CLASS_MAP.get(meter_type),
             )
         except Exception:  # noqa: BLE001 - deliberately broad, see docstring
             # This covers both ista-side failures (EcotrendIstaCzApiError)
@@ -204,6 +206,7 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
             inst_no = int(inst_no)
         return {
             "last_consumption": meter.get("Last_Meter_Consumption"),
+            "consumption_this_month": meter.get("_consumption_this_month"),
             "reading_date": _parse_date(meter.get("Reading_date")),
             "meter_number": meter.get("METER_NO"),
             "room": meter.get("ROOM_DESCR"),

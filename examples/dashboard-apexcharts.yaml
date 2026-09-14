@@ -22,11 +22,29 @@
 #   `group_by` navrch není potřeba, protože historie importovaná touhle
 #   integrací je uložená přesně po měsících.
 # - `span: {end: month, offset: "-1month"}` schválně vynechává aktuální
-#   nedokončený měsíc (jinak by se u něj mohlo počítat nesmyslné/záporné
-#   číslo, protože měsíc ještě neskončil).
+#   nedokončený měsíc - karta ho pro neúplné období spolehlivě nepočítá
+#   (vychází záporná/nesmyslná čísla), nezávisle na téhle integraci.
+#   Aktuální rozjetý měsíc proto řeší samostatná karta níž, přes atribut
+#   `consumption_this_month` (číslo přímo z ista, bez dopočtu).
 
 type: vertical-stack
 cards:
+  - type: entities
+    title: Aktuální měsíc
+    entities:
+      - entity: sensor.YOUR_COLD_WATER_ENTITY_ID
+        name: Studená voda
+        attribute: consumption_this_month
+        suffix: " m³"
+      - entity: sensor.YOUR_HOT_WATER_ENTITY_ID
+        name: Teplá voda
+        attribute: consumption_this_month
+        suffix: " m³"
+      - entity: sensor.YOUR_ENERGY_ENTITY_ID
+        name: Energie
+        attribute: consumption_this_month
+        suffix: " kWh"
+
   - type: custom:apexcharts-card
     header:
       show: true

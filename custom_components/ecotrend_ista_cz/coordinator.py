@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import EcotrendIstaCzApiClient, EcotrendIstaCzApiError, EcotrendIstaCzAuthError
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .statistics import extract_current_month_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +57,44 @@ class EcotrendIstaCzCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             key = str(int(meter_id))
             meters_by_id[key] = meter
 
+        await self._async_update_current_month_values(meters_by_id)
+
         return {
             "meters": meters_by_id,
             "user_info": self.client.user_info,
         }
+
+    async def _async_update_current_month_values(
+        self, meters_by_id: dict[str, dict[str, Any]]
+    ) -> None:
+        """Best-effort: fetch each relevant meter's consumption-so-far for
+        the current, still-in-progress calendar month directly from ista,
+        and stash it under "_consumption_this_month" on that meter's dict
+        (read by sensor.py as an extra_state_attribute).
+
+        This is a plain live read straight from ista's own numbers - not
+        anything computed by us - specifically so it matches what ista's
+        own app shows for the current month, without going anywhere near
+        Home Assistant's own (unreliable for an in-progress period)
+        statistics "change" calculation. Runs once per regular poll
+        (daily by default); failures here are logged and otherwise ignored,
+        never allowed to fail the whole coordinator update - the meter
+        reading itself is the important part and must keep working even if
+        this extra, nice-to-have number can't be fetched right now.
+        """
+        for meter_id, meter in meters_by_id.items():
+            meter_type = (meter.get("MeterType") or "").upper()
+            if meter_type not in ("ENERGY", "HW", "CW"):
+                continue
+            try:
+                history = await self.client.async_get_usage_history(meter_type)
+            except EcotrendIstaCzApiError:
+                _LOGGER.debug(
+                    "Could not fetch this month's consumption-so-far for meter %s",
+                    meter_id,
+                    exc_info=True,
+                )
+                meter["_consumption_this_month"] = None
+                continue
+
+            meter["_consumption_this_month"] = extract_current_month_value(history)
