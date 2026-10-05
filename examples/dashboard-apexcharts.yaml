@@ -43,83 +43,111 @@ cards:
     graph_span: 13month
     span:
       end: month
-    stacked: true
+    update_interval: 1h
     yaxis:
       - decimals: 2
         min: 0
     series:
       - entity: >-
-          sensor.YOUR_COLD_WATER_ENTITY_ID
+          sensor.kuchyne_ista_ecotrend_kovanecka_9_903501_190_00_praha_9_studena_voda_toaleta
         name: Studená voda
         color: '#3399ff'
         type: column
         unit: m³
         float_precision: 2
-        statistics:
-          type: change
-          period: month
-          align: start
-        transform: >
-          if (x === null) return null;
+        data_generator: >
+          const id = entity.entity_id;
 
-          var s = new Date(entity.start), n = new Date();
+          const now = new Date();
 
-          if (s.getFullYear() === n.getFullYear() && s.getMonth() ===
-          n.getMonth()) return null;
+          const idx = (d) => d.getFullYear() * 12 + d.getMonth();
 
-          return Math.max(0, x);
-        show:
-          in_header: false
+          const cur = idx(now);
+
+          const res = await hass.callWS({
+            type: 'recorder/statistics_during_period',
+            start_time: new Date(now.getFullYear(), now.getMonth() - 15, 1).toISOString(),
+            statistic_ids: [id],
+            period: 'month',
+            types: ['state'],
+          });
+
+          const reading = {};
+
+          (res[id] || []).forEach((r) => {
+            if (r.state === null || r.state === undefined) return;
+            const t = typeof r.start === 'number' ? r.start : new Date(r.start).getTime();
+            reading[idx(new Date(t))] = Number(r.state);
+          });
+
+          const live = Number(entity.state);
+
+          if (isFinite(live)) reading[cur] = live;
+
+          const out = [];
+
+          Object.keys(reading).map(Number).sort((a, b) => a - b).forEach((k) =>
+          {
+            if (k < cur - 12 || reading[k - 1] === undefined) return;
+            let v = reading[k] - reading[k - 1];
+            if (k === cur) {
+              const a = entity.attributes.consumption_this_month;
+              if (a !== null && a !== undefined && isFinite(Number(a))) v = Number(a);
+            }
+            out.push([new Date(Math.floor(k / 12), k % 12, 1).getTime(), Math.round(Math.max(0, v) * 1000) / 1000]);
+          });
+
+          return out;
       - entity: >-
-          sensor.YOUR_COLD_WATER_ENTITY_ID
-        name: Studená voda
-        color: '#3399ff'
-        type: column
-        unit: m³
-        float_precision: 2
-        show:
-          in_header: true
-        data_generator: |
-          var d = new Date();
-          var v = Number(entity.attributes.consumption_this_month);
-          return [[new Date(d.getFullYear(), d.getMonth(), 1).getTime(),
-                   isNaN(v) ? null : Math.max(0, v)]];
-      - entity: >-
-          sensor.YOUR_HOT_WATER_ENTITY_ID
+          sensor.kuchyne_ista_ecotrend_kovanecka_9_903501_190_00_praha_9_tepla_voda_toaleta
         name: Teplá voda
         color: '#ff9900'
         type: column
         unit: m³
         float_precision: 2
-        statistics:
-          type: change
-          period: month
-          align: start
-        transform: >
-          if (x === null) return null;
+        data_generator: >
+          const id = entity.entity_id;
 
-          var s = new Date(entity.start), n = new Date();
+          const now = new Date();
 
-          if (s.getFullYear() === n.getFullYear() && s.getMonth() ===
-          n.getMonth()) return null;
+          const idx = (d) => d.getFullYear() * 12 + d.getMonth();
 
-          return Math.max(0, x);
-        show:
-          in_header: false
-      - entity: >-
-          sensor.YOUR_HOT_WATER_ENTITY_ID
-        name: Teplá voda
-        color: '#ff9900'
-        type: column
-        unit: m³
-        float_precision: 2
-        show:
-          in_header: true
-        data_generator: |
-          var d = new Date();
-          var v = Number(entity.attributes.consumption_this_month);
-          return [[new Date(d.getFullYear(), d.getMonth(), 1).getTime(),
-                   isNaN(v) ? null : Math.max(0, v)]];
+          const cur = idx(now);
+
+          const res = await hass.callWS({
+            type: 'recorder/statistics_during_period',
+            start_time: new Date(now.getFullYear(), now.getMonth() - 15, 1).toISOString(),
+            statistic_ids: [id],
+            period: 'month',
+            types: ['state'],
+          });
+
+          const reading = {};
+
+          (res[id] || []).forEach((r) => {
+            if (r.state === null || r.state === undefined) return;
+            const t = typeof r.start === 'number' ? r.start : new Date(r.start).getTime();
+            reading[idx(new Date(t))] = Number(r.state);
+          });
+
+          const live = Number(entity.state);
+
+          if (isFinite(live)) reading[cur] = live;
+
+          const out = [];
+
+          Object.keys(reading).map(Number).sort((a, b) => a - b).forEach((k) =>
+          {
+            if (k < cur - 12 || reading[k - 1] === undefined) return;
+            let v = reading[k] - reading[k - 1];
+            if (k === cur) {
+              const a = entity.attributes.consumption_this_month;
+              if (a !== null && a !== undefined && isFinite(Number(a))) v = Number(a);
+            }
+            out.push([new Date(Math.floor(k / 12), k % 12, 1).getTime(), Math.round(Math.max(0, v) * 1000) / 1000]);
+          });
+
+          return out;
   - type: custom:apexcharts-card
     header:
       show: true
@@ -135,43 +163,58 @@ cards:
     graph_span: 13month
     span:
       end: month
+    update_interval: 1h
     yaxis:
       - decimals: 0
         min: 0
     series:
       - entity: >-
-          sensor.YOUR_ENERGY_ENTITY_ID
+          sensor.kuchyne_ista_ecotrend_kovanecka_9_903501_190_00_praha_9_energie_mistnost
         name: Energie
         color: '#2ecc71'
         type: column
         unit: kWh
         float_precision: 1
-        statistics:
-          type: change
-          period: month
-          align: start
-        transform: >
-          if (x === null) return null;
+        data_generator: >
+          const id = entity.entity_id;
 
-          var s = new Date(entity.start), n = new Date();
+          const now = new Date();
 
-          if (s.getFullYear() === n.getFullYear() && s.getMonth() ===
-          n.getMonth()) return null;
+          const idx = (d) => d.getFullYear() * 12 + d.getMonth();
 
-          return Math.max(0, x);
-        show:
-          in_header: false
-      - entity: >-
-          sensor.YOUR_ENERGY_ENTITY_ID
-        name: Energie
-        color: '#2ecc71'
-        type: column
-        unit: kWh
-        float_precision: 1
-        show:
-          in_header: true
-        data_generator: |
-          var d = new Date();
-          var v = Number(entity.attributes.consumption_this_month);
-          return [[new Date(d.getFullYear(), d.getMonth(), 1).getTime(),
-                   isNaN(v) ? null : Math.max(0, v)]];
+          const cur = idx(now);
+
+          const res = await hass.callWS({
+            type: 'recorder/statistics_during_period',
+            start_time: new Date(now.getFullYear(), now.getMonth() - 15, 1).toISOString(),
+            statistic_ids: [id],
+            period: 'month',
+            types: ['state'],
+          });
+
+          const reading = {};
+
+          (res[id] || []).forEach((r) => {
+            if (r.state === null || r.state === undefined) return;
+            const t = typeof r.start === 'number' ? r.start : new Date(r.start).getTime();
+            reading[idx(new Date(t))] = Number(r.state);
+          });
+
+          const live = Number(entity.state);
+
+          if (isFinite(live)) reading[cur] = live;
+
+          const out = [];
+
+          Object.keys(reading).map(Number).sort((a, b) => a - b).forEach((k) =>
+          {
+            if (k < cur - 12 || reading[k - 1] === undefined) return;
+            let v = reading[k] - reading[k - 1];
+            if (k === cur) {
+              const a = entity.attributes.consumption_this_month;
+              if (a !== null && a !== undefined && isFinite(Number(a))) v = Number(a);
+            }
+            out.push([new Date(Math.floor(k / 12), k % 12, 1).getTime(), Math.round(Math.max(0, v) * 1000) / 1000]);
+          });
+
+          return out;
