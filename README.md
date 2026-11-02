@@ -96,22 +96,38 @@ Nepotřebuje to nové přihlášení (použije se už uložený token), takže t
 lze bez obav spustit i opakovaně – neriskuje se tím žádné další
 zatěžování přihlašovacího endpointu ista.
 
+### Měsíční spotřeba přímo z ista (atribut `monthly_consumption`)
+
+Počítat měsíční spotřebu z rozdílů uložených stavů senzoru (nebo z
+dlouhodobých statistik) je jen přibližné: ista dodává odečty se zpožděním,
+takže stav, který má Home Assistant o půlnoci na přelomu měsíců, je
+poslední **doručený** odečet – ne skutečný stav na konci měsíce. Rozdíly
+takových stavů pak přesouvají spotřebu z jednoho měsíce do druhého (předchozí
+měsíc vyjde moc nízký, ten další moc vysoký) a v krajním případě měsíc
+úplně zmizí. Nejvíc je to vidět první dny v měsíci.
+
+Proto integrace při každém pravidelném dotazu (výchozí 1× denně) vystaví u
+každého senzoru atribut **`monthly_consumption`** – měsíční hodnoty přímo
+z ista za posledních 24 měsíců, např. `{"2026-09": 0.97, "2026-10": 1.02}`.
+Jsou to stejná čísla, jaká ukazuje aplikace ista, nic se nedopočítává.
+Měsíce, pro které ista zatím nemá hodnotu (typicky aktuální měsíc první dny),
+v atributu chybí. Atribut se neukládá do historie recorderu (je to jen
+„živá" hodnota pro dashboardy). Kdyby jeden dotaz na ista selhal, zůstanou
+hodnoty z předchozího dotazu.
+
 ## Ukázkový dashboard (ApexCharts)
 
 V [`examples/dashboard-apexcharts.yaml`](examples/dashboard-apexcharts.yaml)
 je hotová konfigurace pro kartu [ApexCharts Card](https://github.com/RomRider/apexcharts-card)
-(instaluje se přes HACS → Frontend) – karta s aktuálním měsícem
-(`consumption_this_month`) a dva sloupcové grafy, měsíční spotřeba vody
-(teplá + studená) a měsíční spotřeba energie, za posledních 12
-dokončených měsíců.
+(instaluje se přes HACS → Frontend) – dva sloupcové grafy, měsíční
+spotřeba vody (teplá + studená) a měsíční spotřeba energie, za posledních
+13 měsíců včetně aktuálního. Sloupce čtou atribut `monthly_consumption`,
+takže odpovídají aplikaci ista i první den v měsíci.
 
-Sloupcové grafy schválně ukazují jen **dokončené** měsíce
-(`span.offset: "-1month"`). Zkoušeli jsme přidat i rozjetý měsíc přímo do
-grafu přes `statistics: {type: change, period: month}` bez tohohle
-posunu, ale karta ho pro neúplné období spolehlivě nepočítá (vychází
-záporná/nesmyslná čísla) – nezávisí to na naší integraci, je to
-vlastnost dané kombinace karty a HA statistik pro neuzavřené období.
-Proto je aktuální měsíc řešený zvlášť přes `consumption_this_month`.
+Data nejdou přes `statistics: {type: change}` ani přes recorder – to
+bývalo zdrojem chyb: karta pro neúplné období počítá nesmysly (celková
+spotřeba v aktuálním měsíci, záporná čísla) a rozdíly stavů přesouvají
+spotřebu mezi měsíci (viz atribut `monthly_consumption` výše).
 
 Entity ID v tom souboru jsou placeholdery (`sensor.YOUR_COLD_WATER_ENTITY_ID`
 apod.) – entity ID téhle integrace mají v názvu adresu z tvého ista účtu,
@@ -149,7 +165,7 @@ HACS opraví, logo se objeví samo bez jakékoli změny u nás.
    na `github.com/arisid/ha-ecotrend-ista-cz` – při aktualizaci existujícího
    repa nic měnit nemusíš, jen nahraj nové soubory (přepíší staré).
 4. Vytvoř Release s tagem odpovídajícím `version` v manifestu (aktuálně
-   `v0.7.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
+   `v0.8.0`) – HACS podle releasů/tagů verzuje a pozná, že je k dispozici
    update.
 
    **Pořadí je důležité:** nejdřív nahraj/aktualizuj soubory (hlavně

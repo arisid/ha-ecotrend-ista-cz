@@ -34,6 +34,11 @@ _LOGGER = logging.getLogger(__name__)
 # the matching columns.
 _SUPPORTS_MEAN_TYPE = (MAJOR_VERSION, MINOR_VERSION) >= (2025, 11)
 
+# How many calendar months (current one included) of ista's own monthly
+# values are exposed via ``extract_monthly_values`` - enough for a 13-month
+# chart plus a year-over-year comparison.
+MONTHLY_VALUES_WINDOW = 24
+
 
 def _month_start_utc(date_str: str | None) -> datetime | None:
     """Turn ista's "end of month" ISO date string into a UTC, hour-aligned
@@ -83,6 +88,54 @@ def extract_current_month_value(history: list[dict[str, Any]]) -> float | None:
         if (parsed.year, parsed.month) == current_period:
             return float(value)
     return None
+
+
+def extract_monthly_values(
+    history: list[dict[str, Any]], months: int = MONTHLY_VALUES_WINDOW
+) -> dict[str, float]:
+    """Return ista's own per-month consumption as ``{"YYYY-MM": value}`` for
+    the last ``months`` calendar months (current month included), straight
+    from a raw history list as returned by
+    ``EcotrendIstaCzApiClient.async_get_usage_history``.
+
+    These are the exact numbers ista's own app shows per month, so a
+    dashboard reading them matches the app by construction. That is the
+    point of exposing them: deriving monthly consumption from the sensor's
+    *recorded states* is inherently approximate, because ista delivers
+    readings with a lag - the state HA has at midnight on the 1st is the
+    last reading ista had *delivered* by then, not the real end-of-month
+    meter value. Differences of such states move consumption from one
+    month into the next (previous month too low, the one after too high),
+    and can make a month vanish completely. ista's per-month rows have no
+    such problem.
+
+    Rows without a value (ista pads the list with empty future months) are
+    skipped, as are rows outside the window. A row's ``date`` is the date
+    of the last reading it covers - not necessarily the end of its month -
+    so rows are matched by (year, month) only. Should ista ever return two
+    rows for one month, the one with the later date wins.
+    """
+    now = dt_util.now()
+    current_index = now.year * 12 + now.month - 1
+
+    dated: list[tuple[datetime, float]] = []
+    for row in history:
+        value = row.get("value")
+        raw_date = row.get("date")
+        if value is None or raw_date is None:
+            continue
+        try:
+            parsed = datetime.fromisoformat(raw_date)
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        age = current_index - (parsed.year * 12 + parsed.month - 1)
+        if age < 0 or age >= months:
+            continue
+        dated.append((parsed, number))
+
+    dated.sort(key=lambda item: item[0])
+    return {f"{parsed.year:04d}-{parsed.month:02d}": round(number, 3) for parsed, number in dated}
 
 
 def build_statistics(

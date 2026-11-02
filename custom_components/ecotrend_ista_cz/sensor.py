@@ -76,6 +76,10 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    # The per-month history is a dict of ~24 numbers that is only ever read
+    # live by dashboards - there is no reason to also write it into the
+    # recorder's attribute history on every change.
+    _unrecorded_attributes = frozenset({"monthly_consumption"})
 
     def __init__(
         self, coordinator: EcotrendIstaCzCoordinator, entry: ConfigEntry, meter_id: str
@@ -207,6 +211,7 @@ class EcotrendIstaCzMeterSensor(CoordinatorEntity[EcotrendIstaCzCoordinator], Se
         return {
             "last_consumption": meter.get("Last_Meter_Consumption"),
             "consumption_this_month": meter.get("_consumption_this_month"),
+            "monthly_consumption": meter.get("_monthly_consumption"),
             "reading_date": _parse_date(meter.get("Reading_date")),
             "meter_number": meter.get("METER_NO"),
             "room": meter.get("ROOM_DESCR"),

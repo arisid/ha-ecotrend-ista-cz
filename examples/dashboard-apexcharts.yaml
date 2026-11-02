@@ -1,30 +1,30 @@
 # Měsíční grafy spotřeby (voda + energie) pro Lovelace dashboard
 #
-# Vyžaduje kartu "ApexCharts Card" (custom:apexcharts-card) nainstalovanou
-# přes HACS -> Frontend.
+# Vyžaduje:
+#  - kartu "ApexCharts Card" (custom:apexcharts-card) z HACS -> Frontend,
+#  - integraci ista EcoTrend CZ v0.8.0 nebo novější (atribut monthly_consumption).
 #
 # PŘED VLOŽENÍM NAHRAĎ TYHLE TŘI ŘÁDKY svými skutečnými entity ID:
 #   sensor.YOUR_COLD_WATER_ENTITY_ID
 #   sensor.YOUR_HOT_WATER_ENTITY_ID
 #   sensor.YOUR_ENERGY_ENTITY_ID
 #
-# Entity ID této integrace obsahují v názvu adresu z tvého ista účtu (např.
+# Entity ID této integrace obsahují v názvu adresu z ista účtu (např.
 # sensor.ista_ecotrend_hlavni_12_..._studena_voda_toaleta), takže se liší
-# instalaci od instalace - nejsou tedy univerzální a v tomhle souboru je
-# nejde předvyplnit natvrdo za tebe.
-# Najdeš je v Nastavení -> Zařízení a služby -> ista EcoTrend -> klikni na
-# zařízení -> u každého senzoru v pravém horním rohu (i) -> "entity ID",
-# nebo přes Vývojářské nástroje -> Stavy, filtr "ista".
+# instalaci od instalace a nejdou tu předvyplnit.
+# Najdeš je v Nastavení -> Zařízení a služby -> ista EcoTrend -> zařízení ->
+# senzor -> ozubené kolo -> "ID entity", nebo ve Vývojářské nástroje -> Stavy
+# (filtr "ista").
 #
-# Vysvětlivky k nastavení:
-# - `statistics: {type: change, period: month}` počítá rozdíl (spotřebu)
-#   za každý kalendářní měsíc přímo z dlouhodobých statistik - žádný další
-#   `group_by` navrch není potřeba, protože historie importovaná touhle
-#   integrací je uložená přesně po měsících.
-# - `span: {end: month, offset: "-1month"}` schválně vynechává aktuální
-#   nedokončený měsíc - karta ho pro neúplné období spolehlivě nepočítá
-#   (vychází záporná/nesmyslná čísla), nezávisle na téhle integraci.
-#   Aktuální rozjetý měsíc proto řeší samostatný kód, který počítá rozdíl aktuální hodnoty od poslední hodnoty v předchozím měsíci.
+# Jak to funguje:
+# - Každý sloupec je hodnota za jeden kalendářní měsíc přímo z historie ista
+#   (atribut `monthly_consumption`, např. {"2026-10": 1.02}) - tedy přesně to,
+#   co ukazuje aplikace ista. Nic se nepočítá z rozdílů uložených stavů
+#   senzoru, takže se spotřeba nemůže přesouvat mezi sousedními měsíci.
+# - Poslední sloupec je aktuální měsíc. Dokud ista nemá pro nový měsíc
+#   žádnou hodnotu (typicky první dny v měsíci), ukáže se 0.
+# - Atribut se obnovuje při každém dotazu integrace na ista (výchozí
+#   interval: 1 den) - data v ista se stejně mění jen asi jednou týdně.
 
 type: vertical-stack
 cards:
@@ -48,105 +48,49 @@ cards:
       - decimals: 2
         min: 0
     series:
-      - entity: >-
-          sensor.kuchyne_ista_ecotrend_kovanecka_9_903501_190_00_praha_9_studena_voda_toaleta
+      - entity: sensor.YOUR_COLD_WATER_ENTITY_ID
         name: Studená voda
         color: '#3399ff'
         type: column
         unit: m³
         float_precision: 2
-        data_generator: >
-          const id = entity.entity_id;
-
+        data_generator: |
+          const attr = entity.attributes.monthly_consumption || {};
           const now = new Date();
-
-          const idx = (d) => d.getFullYear() * 12 + d.getMonth();
-
-          const cur = idx(now);
-
-          const res = await hass.callWS({
-            type: 'recorder/statistics_during_period',
-            start_time: new Date(now.getFullYear(), now.getMonth() - 15, 1).toISOString(),
-            statistic_ids: [id],
-            period: 'month',
-            types: ['state'],
-          });
-
-          const reading = {};
-
-          (res[id] || []).forEach((r) => {
-            if (r.state === null || r.state === undefined) return;
-            const t = typeof r.start === 'number' ? r.start : new Date(r.start).getTime();
-            reading[idx(new Date(t))] = Number(r.state);
-          });
-
-          const live = Number(entity.state);
-
-          if (isFinite(live)) reading[cur] = live;
-
           const out = [];
-
-          Object.keys(reading).map(Number).sort((a, b) => a - b).forEach((k) =>
-          {
-            if (k < cur - 12 || reading[k - 1] === undefined) return;
-            let v = reading[k] - reading[k - 1];
-            if (k === cur) {
-              const a = entity.attributes.consumption_this_month;
-              if (a !== null && a !== undefined && isFinite(Number(a))) v = Number(a);
+          for (let i = 12; i >= 0; i--) {
+            const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = month.getFullYear() + '-' + String(month.getMonth() + 1).padStart(2, '0');
+            const raw = attr[key];
+            const value = (raw === null || raw === undefined) ? NaN : Number(raw);
+            if (isFinite(value)) {
+              out.push([month.getTime(), Math.round(Math.max(0, value) * 1000) / 1000]);
+            } else if (i === 0) {
+              out.push([month.getTime(), 0]);
             }
-            out.push([new Date(Math.floor(k / 12), k % 12, 1).getTime(), Math.round(Math.max(0, v) * 1000) / 1000]);
-          });
-
+          }
           return out;
-      - entity: >-
-          sensor.kuchyne_ista_ecotrend_kovanecka_9_903501_190_00_praha_9_tepla_voda_toaleta
+      - entity: sensor.YOUR_HOT_WATER_ENTITY_ID
         name: Teplá voda
         color: '#ff9900'
         type: column
         unit: m³
         float_precision: 2
-        data_generator: >
-          const id = entity.entity_id;
-
+        data_generator: |
+          const attr = entity.attributes.monthly_consumption || {};
           const now = new Date();
-
-          const idx = (d) => d.getFullYear() * 12 + d.getMonth();
-
-          const cur = idx(now);
-
-          const res = await hass.callWS({
-            type: 'recorder/statistics_during_period',
-            start_time: new Date(now.getFullYear(), now.getMonth() - 15, 1).toISOString(),
-            statistic_ids: [id],
-            period: 'month',
-            types: ['state'],
-          });
-
-          const reading = {};
-
-          (res[id] || []).forEach((r) => {
-            if (r.state === null || r.state === undefined) return;
-            const t = typeof r.start === 'number' ? r.start : new Date(r.start).getTime();
-            reading[idx(new Date(t))] = Number(r.state);
-          });
-
-          const live = Number(entity.state);
-
-          if (isFinite(live)) reading[cur] = live;
-
           const out = [];
-
-          Object.keys(reading).map(Number).sort((a, b) => a - b).forEach((k) =>
-          {
-            if (k < cur - 12 || reading[k - 1] === undefined) return;
-            let v = reading[k] - reading[k - 1];
-            if (k === cur) {
-              const a = entity.attributes.consumption_this_month;
-              if (a !== null && a !== undefined && isFinite(Number(a))) v = Number(a);
+          for (let i = 12; i >= 0; i--) {
+            const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = month.getFullYear() + '-' + String(month.getMonth() + 1).padStart(2, '0');
+            const raw = attr[key];
+            const value = (raw === null || raw === undefined) ? NaN : Number(raw);
+            if (isFinite(value)) {
+              out.push([month.getTime(), Math.round(Math.max(0, value) * 1000) / 1000]);
+            } else if (i === 0) {
+              out.push([month.getTime(), 0]);
             }
-            out.push([new Date(Math.floor(k / 12), k % 12, 1).getTime(), Math.round(Math.max(0, v) * 1000) / 1000]);
-          });
-
+          }
           return out;
   - type: custom:apexcharts-card
     header:
@@ -168,53 +112,25 @@ cards:
       - decimals: 0
         min: 0
     series:
-      - entity: >-
-          sensor.kuchyne_ista_ecotrend_kovanecka_9_903501_190_00_praha_9_energie_mistnost
+      - entity: sensor.YOUR_ENERGY_ENTITY_ID
         name: Energie
         color: '#2ecc71'
         type: column
         unit: kWh
         float_precision: 1
-        data_generator: >
-          const id = entity.entity_id;
-
+        data_generator: |
+          const attr = entity.attributes.monthly_consumption || {};
           const now = new Date();
-
-          const idx = (d) => d.getFullYear() * 12 + d.getMonth();
-
-          const cur = idx(now);
-
-          const res = await hass.callWS({
-            type: 'recorder/statistics_during_period',
-            start_time: new Date(now.getFullYear(), now.getMonth() - 15, 1).toISOString(),
-            statistic_ids: [id],
-            period: 'month',
-            types: ['state'],
-          });
-
-          const reading = {};
-
-          (res[id] || []).forEach((r) => {
-            if (r.state === null || r.state === undefined) return;
-            const t = typeof r.start === 'number' ? r.start : new Date(r.start).getTime();
-            reading[idx(new Date(t))] = Number(r.state);
-          });
-
-          const live = Number(entity.state);
-
-          if (isFinite(live)) reading[cur] = live;
-
           const out = [];
-
-          Object.keys(reading).map(Number).sort((a, b) => a - b).forEach((k) =>
-          {
-            if (k < cur - 12 || reading[k - 1] === undefined) return;
-            let v = reading[k] - reading[k - 1];
-            if (k === cur) {
-              const a = entity.attributes.consumption_this_month;
-              if (a !== null && a !== undefined && isFinite(Number(a))) v = Number(a);
+          for (let i = 12; i >= 0; i--) {
+            const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = month.getFullYear() + '-' + String(month.getMonth() + 1).padStart(2, '0');
+            const raw = attr[key];
+            const value = (raw === null || raw === undefined) ? NaN : Number(raw);
+            if (isFinite(value)) {
+              out.push([month.getTime(), Math.round(Math.max(0, value) * 1000) / 1000]);
+            } else if (i === 0) {
+              out.push([month.getTime(), 0]);
             }
-            out.push([new Date(Math.floor(k / 12), k % 12, 1).getTime(), Math.round(Math.max(0, v) * 1000) / 1000]);
-          });
-
+          }
           return out;
